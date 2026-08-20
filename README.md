@@ -6,12 +6,13 @@ A lightweight Windows **system-tray temperature monitor**. Single-file, self-con
 
 - **Dynamic tray icon** — shows the hottest component (CPU / GPU / SSD / MB / Other) with a color state:
   green (ok), amber (warm), red (hot). Gray when no data is available.
-- **Hover tooltip** — current temperatures, fan speed, load and session-peak, e.g.
-  `CPU  51°C ↑87  12%  900RPM`.
+- **Hover tooltip** — current temperatures, fan speed, load and session-peak for **every**
+  temperature-bearing hardware**, e.g. `LEGEND 860  58°C  81%` / `LEGEND 710  37°C  91%`.
 - **Threshold alerts** — balloon notification that names the offending hardware when a threshold is
   breached, with an optional beep. Hysteresis + cooldown prevent notification spam.
 - **Details window** — a live 10-minute history graph (300 samples at 2 s) with dynamic °C gridlines
-  that follow real hardware temperatures, plus a full sensor table (value / min / max per session).
+  that follow real hardware temperatures and one line per hardware (multiple SSDs, GPUs, etc. each
+  get their own color), plus a full sensor table (value / min / max per session).
 - **Settings window** — per-group thresholds and per-sensor overrides, beep toggle, live refresh.
 - **Auto-start** with Windows (HKCU Run), toggleable from the tray menu.
 - **Truly lightweight** — 2 s poll interval, zero-allocation tick, cached sensor references.
@@ -92,12 +93,13 @@ dibangun dengan C# / .NET 9 (WinForms) dan [LibreHardwareMonitor](https://github
 
 - **Ikon tray dinamis** — menampilkan komponen terpanas (CPU / GPU / SSD / MB / Lainnya) dengan
   status warna: hijau (normal), kuning (warm), merah (panas). Abu-abu jika tidak ada data.
-- **Tooltip saat hover** — suhu terkini, kecepatan fan, beban, dan puncak sesi, contoh:
-  `CPU  51°C ↑87  12%  900RPM`.
+- **Tooltip saat hover** — suhu terkini, kecepatan fan, beban, dan puncak sesi untuk **setiap
+  hardware** yang punya sensor suhu, contoh: `LEGEND 860  58°C  81%` / `LEGEND 710  37°C  91%`.
 - **Peringatan threshold** — notifikasi balloon yang menyebutkan hardware yang melewati ambang batas,
   dengan beep opsional. Hysteresis + cooldown mencegah notifikasi berulang.
 - **Jendela Details** — grafik history 10 menit live (300 sampel tiap 2 detik) dengan garis grid °C
-  dinamis yang mengikuti suhu hardware nyata, plus tabel lengkap semua sensor (nilai / min / max sesi).
+  dinamis yang mengikuti suhu hardware nyata dan satu garis per hardware (banyak SSD, GPU, dsb.
+  masing-masing punya warna sendiri), plus tabel lengkap semua sensor (nilai / min / max sesi).
 - **Jendela Settings** — ambang batas per grup dan override per sensor, toggle beep, refresh langsung.
 - **Auto-start** saat Windows menyala (HKCU Run), bisa diaktifkan dari menu tray.
 - **Sangat ringan** — interval polling 2 detik, tick tanpa alokasi, referensi sensor di-cache.

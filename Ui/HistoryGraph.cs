@@ -36,6 +36,16 @@ public sealed class HistoryGraph : Control
         base.Dispose(disposing);
     }
 
+    private Color ForSlot(int slotIdx)
+    {
+        var hw = _engine.Hardware[slotIdx];
+        var baseC = GroupColors[(int)hw.Group];
+        int k = 0;
+        for (int j = 0; j < slotIdx; j++)
+            if (_engine.Hardware[j].Group == hw.Group) k++;
+        return k == 0 ? baseC : ControlPaint.Dark(baseC, Math.Min(0.15f * k, 0.6f));
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
@@ -46,22 +56,23 @@ public sealed class HistoryGraph : Control
         int count = _engine.HistoryCount;
         int pts = PollingEngine.HistoryPoints;
         int idx = _engine.HistoryIndex;
+        int hwCount = _engine.HardwareCount;
 
-        if (hist == null || count < 2 || Width < 60 || Height < 30)
+        if (hist == null || hwCount == 0 || count < 2 || Width < 60 || Height < 30)
         {
             TextRenderer.DrawText(g, "collecting data...", Font, new Point((int)LeftPad, Height / 2 - 10), Color.Gray);
             return;
         }
 
         float min = float.MaxValue, max = float.MinValue;
-        var hasData = new bool[Groups.Count];
-        for (int gi = 0; gi < Groups.Count; gi++)
+        var hasData = new bool[hwCount];
+        for (int hi = 0; hi < hwCount; hi++)
         {
             for (int k = 0; k < count; k++)
             {
-                float v = hist[gi * pts + ((idx - count + 1 + k + pts) % pts)];
+                float v = hist[hi * pts + ((idx - count + 1 + k + pts) % pts)];
                 if (float.IsNaN(v)) continue;
-                hasData[gi] = true;
+                hasData[hi] = true;
                 if (v < min) min = v;
                 if (v > max) max = v;
             }
@@ -97,9 +108,14 @@ public sealed class HistoryGraph : Control
             }
         }
 
+        var groupHasData = new bool[Groups.Count];
+        for (int hi = 0; hi < hwCount; hi++)
+            if (hasData[hi])
+                groupHasData[(int)_engine.Hardware[hi].Group] = true;
+
         for (int gi = 0; gi < Groups.Count; gi++)
         {
-            if (!hasData[gi]) continue;
+            if (!groupHasData[gi]) continue;
             float th = _alerts.ThresholdForGroup((Group)gi);
             using var pen = new Pen(Color.FromArgb(80, GroupColors[gi]))
             {
@@ -110,33 +126,38 @@ public sealed class HistoryGraph : Control
             g.DrawLine(pen, LeftPad, ty, Width - EdgePad, ty);
         }
 
-        var legendLabels = new List<string>();
-        var legendColors = new List<Color>();
-
-        for (int gi = 0; gi < Groups.Count; gi++)
+        for (int hi = 0; hi < hwCount; hi++)
         {
-            if (!hasData[gi]) continue;
+            if (!hasData[hi]) continue;
             var points = new List<PointF>(count);
             for (int k = 0; k < count; k++)
             {
-                float v = hist[gi * pts + ((idx - count + 1 + k + pts) % pts)];
+                float v = hist[hi * pts + ((idx - count + 1 + k + pts) % pts)];
                 if (float.IsNaN(v)) continue;
                 points.Add(new PointF(X(k), Y(v)));
             }
             if (points.Count < 2) continue;
-            using var pen = new Pen(GroupColors[gi], 1.6f);
+            using var pen = new Pen(ForSlot(hi), 1.6f);
             g.DrawLines(pen, points.ToArray());
-            legendLabels.Add(Groups.Label((Group)gi));
-            legendColors.Add(GroupColors[gi]);
         }
 
         float lx = LeftPad;
-        for (int i = 0; i < legendLabels.Count; i++)
+        float ly = EdgePad;
+        for (int hi = 0; hi < hwCount; hi++)
         {
-            var size = TextRenderer.MeasureText(legendLabels[i], Font);
-            using var brush = new SolidBrush(legendColors[i]);
-            g.FillRectangle(brush, lx, EdgePad - 2, 10, 10);
-            TextRenderer.DrawText(g, legendLabels[i], Font, new Point((int)lx + 14, (int)EdgePad - 5), Color.DimGray);
+            if (!hasData[hi]) continue;
+            var hw = _engine.Hardware[hi];
+            string text = hw.GroupLabel + "·" + hw.ShortName;
+            var size = TextRenderer.MeasureText(text, _labelFont);
+            if (lx + 14 + size.Width > Width - EdgePad)
+            {
+                lx = LeftPad;
+                ly += 16f;
+                if (ly > Height - EdgePad - 4) break;
+            }
+            using var brush = new SolidBrush(ForSlot(hi));
+            g.FillRectangle(brush, lx, ly - 2, 10, 10);
+            TextRenderer.DrawText(g, text, _labelFont, new Point((int)lx + 14, (int)ly - 5), Color.DimGray);
             lx += 14 + size.Width + 14;
         }
     }

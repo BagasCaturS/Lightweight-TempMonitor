@@ -16,14 +16,15 @@ public sealed class PollingEngine : IDisposable
     private int _ticking;
     private int _intervalMs = 2000;
     private float[] _values = Array.Empty<float>();
-    private readonly float[] _groupMax = new float[Groups.Count];
-    private readonly float[] _groupPeak = new float[Groups.Count];
-    private readonly float[] _groupFan = new float[Groups.Count];
-    private readonly float[] _groupLoad = new float[Groups.Count];
-    private readonly float[] _history = new float[Groups.Count * HistoryPoints];
+
+    private readonly float[] _hwMax;
+    private readonly float[] _hwPeak;
+    private readonly float[] _hwFan;
+    private readonly float[] _hwLoad;
+    private readonly float[] _history;
     private int _historyIdx;
     private int _historyCount;
-    private readonly StringBuilder _sb = new(160);
+    private readonly StringBuilder _sb = new(192);
 
     private string _lastTooltip = string.Empty;
     private int _lastIconKey = -1;
@@ -33,12 +34,21 @@ public sealed class PollingEngine : IDisposable
     public int HistoryCount => _historyCount;
     public int HistoryIndex => _historyIdx;
     public float[] History => _history;
+    public int HardwareCount => _catalog.Hardware.Length;
+    public HardwareEntry[] Hardware => _catalog.Hardware;
 
     public PollingEngine(Computer computer, SensorCatalog catalog, AlertEngine alerts)
     {
         _computer = computer;
         _catalog = catalog;
         _alerts = alerts;
+
+        int hwCount = catalog.Hardware.Length;
+        _hwMax = new float[hwCount];
+        _hwPeak = new float[hwCount];
+        _hwFan = new float[hwCount];
+        _hwLoad = new float[hwCount];
+        _history = new float[hwCount * HistoryPoints];
     }
 
     public void Start() => RestartTimer(_intervalMs);
@@ -80,28 +90,30 @@ public sealed class PollingEngine : IDisposable
                 _values[i] = v > 0 ? v : float.NaN;
             }
 
-            Array.Fill(_groupMax, float.NaN);
-            Array.Fill(_groupPeak, float.NaN);
+            int hwCount = _hwMax.Length;
+            Array.Fill(_hwMax, float.NaN);
+            Array.Fill(_hwPeak, float.NaN);
+
             bool any = false;
             for (int i = 0; i < n; i++)
             {
                 float v = _values[i];
                 if (float.IsNaN(v)) continue;
                 any = true;
-                int gi = (int)entries[i].Group;
-                if (float.IsNaN(_groupMax[gi]) || v > _groupMax[gi]) _groupMax[gi] = v;
+                int hi = entries[i].HardwareIndex;
+                if (hi >= 0 && (float.IsNaN(_hwMax[hi]) || v > _hwMax[hi])) _hwMax[hi] = v;
             }
 
             for (int i = 0; i < n; i++)
             {
                 float p = entries[i].Sensor.Max ?? float.NaN;
                 if (p <= 0 || float.IsNaN(p)) continue;
-                int gi = (int)entries[i].Group;
-                if (float.IsNaN(_groupPeak[gi]) || p > _groupPeak[gi]) _groupPeak[gi] = p;
+                int hi = entries[i].HardwareIndex;
+                if (hi >= 0 && (float.IsNaN(_hwPeak[hi]) || p > _hwPeak[hi])) _hwPeak[hi] = p;
             }
 
-            FillGroupMax(_groupFan, _catalog.Fans);
-            FillGroupMax(_groupLoad, _catalog.Loads);
+            FillHardwareMax(_hwFan, _catalog.Fans);
+            FillHardwareMax(_hwLoad, _catalog.Loads);
 
             if (!any)
             {
@@ -113,21 +125,32 @@ public sealed class PollingEngine : IDisposable
 
             _alerts.Evaluate(entries, _values, n);
 
-            int hotGroup = (int)entries[_alerts.HottestIndex].Group;
+            int hotGroup = -1;
+            float hotV = float.MinValue;
+            for (int i = 0; i < hwCount; i++)
+            {
+                float v = _hwMax[i];
+                if (float.IsNaN(v) || v <= hotV) continue;
+                hotV = v;
+                hotGroup = (int)_catalog.Hardware[i].Group;
+            }
+            if (hotGroup < 0) hotGroup = (int)entries[_alerts.HottestIndex].Group;
+
             var level = _alerts.AnyAlerting ? IconLevel.Hot : _alerts.AnyWarm ? IconLevel.Warm : IconLevel.Ok;
             int key = hotGroup * 3 + (int)level;
 
+            var hardware = _catalog.Hardware;
             _sb.Clear();
-            for (int gi = 0; gi < Groups.Count; gi++)
+            for (int i = 0; i < hwCount; i++)
             {
-                float v = _groupMax[gi];
+                float v = _hwMax[i];
                 if (float.IsNaN(v)) continue;
-                _sb.Append(Groups.Label((Group)gi)).Append("  ").Append((int)v).Append("°C");
-                float pk = _groupPeak[gi];
+                _sb.Append(hardware[i].ShortName).Append("  ").Append((int)v).Append("°C");
+                float pk = _hwPeak[i];
                 if (!float.IsNaN(pk) && pk > v) _sb.Append(" ↑").Append((int)pk);
-                float ld = _groupLoad[gi];
+                float ld = _hwLoad[i];
                 if (!float.IsNaN(ld)) _sb.Append("  ").Append((int)ld).Append('%');
-                float fn = _groupFan[gi];
+                float fn = _hwFan[i];
                 if (!float.IsNaN(fn)) _sb.Append("  ").Append((int)fn).Append("RPM");
                 _sb.Append('\n');
             }
@@ -136,11 +159,11 @@ public sealed class PollingEngine : IDisposable
             if (_sb.Length > 115)
             {
                 _sb.Clear();
-                for (int gi = 0; gi < Groups.Count; gi++)
+                for (int i = 0; i < hwCount; i++)
                 {
-                    float v = _groupMax[gi];
+                    float v = _hwMax[i];
                     if (float.IsNaN(v)) continue;
-                    _sb.Append(Groups.Label((Group)gi)).Append("  ").Append((int)v).Append("°C").Append('\n');
+                    _sb.Append(hardware[i].ShortName).Append("  ").Append((int)v).Append("°C").Append('\n');
                 }
                 if (_sb.Length > 0) _sb.Length--;
             }
@@ -157,15 +180,15 @@ public sealed class PollingEngine : IDisposable
         }
     }
 
-    private void FillGroupMax(float[] target, SensorEntry[] entries)
+    private void FillHardwareMax(float[] target, SensorEntry[] entries)
     {
         Array.Fill(target, float.NaN);
         for (int i = 0; i < entries.Length; i++)
         {
             float v = entries[i].Sensor.Value ?? float.NaN;
             if (float.IsNaN(v)) continue;
-            int gi = (int)entries[i].Group;
-            if (float.IsNaN(target[gi]) || v > target[gi]) target[gi] = v;
+            int hi = entries[i].HardwareIndex;
+            if (hi >= 0 && (float.IsNaN(target[hi]) || v > target[hi])) target[hi] = v;
         }
     }
 
@@ -174,8 +197,9 @@ public sealed class PollingEngine : IDisposable
         int h = _historyIdx;
         _historyIdx = (h + 1) % HistoryPoints;
         if (_historyCount < HistoryPoints) _historyCount++;
-        for (int gi = 0; gi < Groups.Count; gi++)
-            _history[gi * HistoryPoints + h] = _groupMax[gi];
+        int pts = HistoryPoints;
+        for (int hi = 0; hi < _hwMax.Length; hi++)
+            _history[hi * pts + h] = _hwMax[hi];
     }
 
     private static void UpdateHardware(IHardware hw)

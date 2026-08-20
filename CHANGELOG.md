@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-08-20
+
+### Added
+
+- Full multi-hardware support per group: the tooltip and the history graph now show **every**
+  temperature-bearing hardware individually instead of only the hottest per group. Users with
+  multiple SSDs, GPUs or CPU packages see each one as its own line.
+- Short hardware names in the tooltip and graph legend (brand prefixes stripped), e.g.
+  `ADATA LEGEND 860` → `LEGEND 860`.
+- Distinct per-hardware line colors within a group (base group color darkened per hardware index).
+- Graph legend wraps to additional rows when the hardware list overflows the width.
+
+### Changed
+
+- History storage is now per hardware (N × 300 samples) instead of per group (5 × 300).
+- Tooltip lists one line per hardware with its own temperature, peak, load and fan speed;
+  falls back to a compact temperature-only layout when it exceeds 115 characters.
+
 ## [1.0.0] - 2026-08-20
 
 ### Added
