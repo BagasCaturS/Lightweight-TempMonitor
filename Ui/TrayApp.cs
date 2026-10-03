@@ -128,12 +128,15 @@ public sealed class TrayApp : ApplicationContext
         if (_startupItem.Checked)
         {
             key.DeleteValue(RunValue, false);
-            _startupItem.Checked = false;
+            _startupItem.Checked = IsStartupEnabled();
+            Log("autostart disabled");
         }
         else
         {
-            key.SetValue(RunValue, "\"" + Application.ExecutablePath + "\"");
-            _startupItem.Checked = true;
+            string path = "\"" + Application.ExecutablePath + "\"";
+            key.SetValue(RunValue, path);
+            _startupItem.Checked = IsStartupEnabled();
+            Log($"autostart enabled: {path}");
         }
     }
 
@@ -141,5 +144,16 @@ public sealed class TrayApp : ApplicationContext
     {
         using var key = Registry.CurrentUser.OpenSubKey(RunKey);
         return key?.GetValue(RunValue) is string;
+    }
+
+    private static void Log(string msg)
+    {
+        try
+        {
+            File.AppendAllText(
+                Path.Combine(AppContext.BaseDirectory, "startup.log"),
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {msg}\n");
+        }
+        catch { }
     }
 }
